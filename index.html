@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>D3 Scrollytelling Story</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="intro">
+            <h1>The Data Story</h1>
+            <p>Scroll down to explore how data transforms</p>
+        </header>
+
+        <!-- Scrollytelling sections -->
+        <div class="scrolly-container">
+            <!-- Fixed visualization container -->
+            <div class="visualization-container">
+                <svg id="main-chart"></svg>
+            </div>
+
+            <!-- Text sections that trigger transitions -->
+            <div class="text-sections">
+                <div class="text-section" data-step="0">
+                    <div class="text-content">
+                        <h2>Starting with the Basics</h2>
+                        <p>Here we see our data represented as a simple bar chart. Each bar represents a different category with its corresponding value.</p>
+                    </div>
+                </div>
+
+                <div class="text-section" data-step="1">
+                    <div class="text-content">
+                        <h2>The Transformation Begins</h2>
+                        <p>Watch as our bars begin to curve and transform. The linear representation starts to bend into something more organic.</p>
+                    </div>
+                </div>
+
+                <div class="text-section" data-step="2">
+                    <div class="text-content">
+                        <h2>Embracing the Circle</h2>
+                        <p>Our data has now formed a complete circle. This radial representation reveals new patterns and relationships in the data.</p>
+                    </div>
+                </div>
+
+                <div class="text-section" data-step="3">
+                    <div class="text-content">
+                        <h2>The Complete Picture</h2>
+                        <p>In its final form, our circular visualization shows the cyclical nature of our data, with enhanced colors and refined positioning.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <footer>
+            <p>Built with D3.js and love for data storytelling</p>
+        </footer>
+    </div>
+
+    <script src="js/data.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
