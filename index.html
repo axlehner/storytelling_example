@@ -270,6 +270,71 @@
             box-shadow: 0 4px 8px rgba(0,0,0,0.2);
         }
 
+        .project-legend {
+            margin-top: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            justify-content: center;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 12px;
+            background: rgba(15, 71, 175, 0.1);
+            border-radius: 20px;
+            font-size: 12px;
+            color: #333;
+            border: 1px solid rgba(15, 71, 175, 0.2);
+        }
+
+        .legend-color {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+        }
+
+        .circular-tooltip {
+            position: absolute;
+            background: rgba(15, 71, 175, 0.95);
+            color: white;
+            padding: 16px 20px;
+            border-radius: 12px;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            max-width: 350px;
+            line-height: 1.4;
+        }
+
+        .project-bar {
+            cursor: pointer;
+            transition: all 0.3s ease;
+            /* The stroke color is now set by D3.js, not here. */
+        }
+
+
+        .project-bar:hover {
+            /* The filter will brighten the existing color, which is better. */
+            filter: brightness(1.5); 
+        }
+
+
+        .sector-label {
+            font-size: 11px;
+            font-weight: 600;
+            fill: #333;
+            text-anchor: middle;
+            pointer-events: none;
+        }
+
         .world-bank-header {
             background: #0f47af;
             color: white;
@@ -350,6 +415,26 @@
                 <div id="chart"></div>
             </div>
         </div>
+
+        <!-- Section 3: Individual Projects Circular View -->
+        <div class="story-section">
+            <div class="chart-container">
+                <h2 class="chart-title">Individual Projects by Sector</h2>
+                <p class="chart-subtitle" id="circularSubtitle">Each bar represents an individual project sized by commitment amount</p>
+                
+                <div class="controls-container">
+                    <div class="country-selector-container">
+                        <label class="country-selector-label" for="countrySelect2">Country:</label>
+                        <select class="country-selector" id="countrySelect2" onchange="onCountryChangeCircular()">
+                            <option value="">Loading countries...</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div id="circularChart"></div>
+                <div id="projectLegend" class="project-legend"></div>
+            </div>
+        </div>
     </div>
 
     <div class="scroll-indicator">
@@ -365,17 +450,25 @@
         let processedData = [];
         let currentView = 'count';
         let currentCountry = '';
+        let currentCountryCircular = '';
         let allCountries = [];
         let chart, svg, xScale, yScale, bars;
+        let circularChart, circularSvg;
+        let individualProjects = [];
 
         // Chart dimensions
         const margin = {top: 40, right: 60, bottom: 100, left: 80};
         const width = 800 - margin.left - margin.right;
         const height = 500 - margin.top - margin.bottom;
 
-        // World Bank color scale
+        // Circular chart dimensions
+        const circularRadius = 180;
+        const circularWidth = 500;
+        const circularHeight = 500;
+
+        // Categorical color scale - distinct and colorblind-friendly
         const colorScale = d3.scaleOrdinal()
-            .range(['#0f47af', '#00aeef', '#009fda', '#0071bc', '#005eb8', '#083691', '#1f5aa6', '#336bb5', '#4c7cc4', '#668dd3']);
+            .range(['#e74c3c', '#2ecc71', '#f39c12', '#9b59b6', '#1abc9c', '#e67e22', '#34495e', '#f1c40f', '#e91e63', '#16a085', '#d35400', '#8e44ad']);
 
         // Initialize the visualization
         async function init() {
@@ -392,16 +485,25 @@
                 // Get all countries and populate selector
                 allCountries = Object.keys(rawData).sort();
                 populateCountrySelector();
+                populateCountrySelectorCircular();
                 
                 // Set default country (first one)
                 if (allCountries.length > 0) {
                     currentCountry = allCountries[0];
+                    currentCountryCircular = allCountries[0];
                     document.getElementById('countrySelect').value = currentCountry;
+                    document.getElementById('countrySelect2').value = currentCountryCircular;
+                    
+                    // Update circular subtitle
+                    document.getElementById('circularSubtitle').textContent = 
+                        `Individual projects in ${currentCountryCircular} - Each bar sized by commitment amount`;
                 }
                 
                 processData();
+                processIndividualProjects();  // Process individual projects for circular chart
                 updateStats();
                 setupChart();
+                setupCircularChart();
                 setupScrollHandling();
                 
             } catch (error) {
@@ -409,19 +511,48 @@
                 rawData = generateSampleData();
                 allCountries = Object.keys(rawData).sort();
                 populateCountrySelector();
+                populateCountrySelectorCircular();
                 if (allCountries.length > 0) {
                     currentCountry = allCountries[0];
+                    currentCountryCircular = allCountries[0];
                     document.getElementById('countrySelect').value = currentCountry;
+                    document.getElementById('countrySelect2').value = currentCountryCircular;
+                    
+                    // Update circular subtitle
+                    document.getElementById('circularSubtitle').textContent = 
+                        `Individual projects in ${currentCountryCircular} - Each bar sized by commitment amount`;
                 }
                 processData();
+                processIndividualProjects();  // Process individual projects for circular chart
                 updateStats();
                 setupChart();
+                setupCircularChart();
                 setupScrollHandling();
             }
         }
 
         function populateCountrySelector() {
             const selector = document.getElementById('countrySelect');
+            selector.innerHTML = '';
+            
+            if (allCountries.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No countries found';
+                selector.appendChild(option);
+                return;
+            }
+            
+            allCountries.forEach(country => {
+                const option = document.createElement('option');
+                option.value = country;
+                option.textContent = country;
+                selector.appendChild(option);
+            });
+        }
+
+        function populateCountrySelectorCircular() {
+            const selector = document.getElementById('countrySelect2');
             selector.innerHTML = '';
             
             if (allCountries.length === 0) {
@@ -455,6 +586,22 @@
             drawChart();
         }
 
+        function onCountryChangeCircular() {
+            const selector = document.getElementById('countrySelect2');
+            currentCountryCircular = selector.value;
+            
+            if (!currentCountryCircular) return;
+            
+            // Update subtitle
+            document.getElementById('circularSubtitle').textContent = 
+                `Individual projects in ${currentCountryCircular} - Each bar sized by commitment amount`;
+            
+            // Process individual projects data
+            processIndividualProjects();
+            drawCircularChart();
+            createLegend();
+        }
+
         function updateChartTitles() {
             const baseTitle = currentView === 'count' ? 
                 'Project Distribution by Sector' : 
@@ -470,13 +617,13 @@
         function generateSampleData() {
             const sectors = [
                 "Urban, Resilience and Land",
-                "Health, Nutrition & Population",
+                "Health, Nutrition &amp; Population",
                 "Education",
-                "Social Protection & Jobs",
-                "Finance, Competitiveness & Innovation",
-                "Transport & Digital Development",
+                "Social Protection &amp; Jobs",
+                "Finance, Competitiveness &amp; Innovation",
+                "Transport &amp; Digital Development",
                 "Water",
-                "Energy & Extractives",
+                "Energy &amp; Extractives",
                 "Agriculture and Food",
                 "Governance"
             ];
@@ -494,10 +641,16 @@
                     const projectId = `P${String(Math.floor(Math.random() * 900000) + 100000)}`;
                     sampleData[country].ratings_parsed[projectId] = {
                         project_id: projectId,
+                        project_name: `Sample Project ${i + 1} - ${sectors[Math.floor(Math.random() * sectors.length)]}`,
+                        region: 'LCR',
+                        country: country,
+                        GPVP: 'GGIVP',
+                        VPU: 'LCRVP',
                         lead_GP: sectors[Math.floor(Math.random() * sectors.length)],
-                        commitment_net: Math.random() * 400000000 + 50000000,
-                        project_name: `Sample Project ${i + 1}`,
-                        country: country
+                        lending_inst: 'IPF',
+                        agreement: 'IBRD',
+                        approval_FY: 2017 + Math.floor(Math.random() * 8),
+                        commitment_net: Math.random() * 400000000 + 50000000
                     };
                 }
             });
@@ -531,9 +684,10 @@
                 });
             }
 
-            // Convert to array and sort
+            // Convert to array and sort by the current view metric
+            const sortMetric = currentView === 'count' ? 'count' : 'commitment';
             processedData = Object.values(sectorData)
-                .sort((a, b) => b.count - a.count)
+                .sort((a, b) => b[sortMetric] - a[sortMetric])
                 .map(d => ({
                     ...d,
                     commitment: d.commitment / 1000000
@@ -545,6 +699,38 @@
                 commitment: totalCommitment / 1000000,
                 sectors: processedData.length
             };
+        }
+
+        function processIndividualProjects() {
+            individualProjects = [];
+            
+            if (currentCountryCircular && rawData[currentCountryCircular] && rawData[currentCountryCircular].ratings_parsed) {
+                Object.keys(rawData[currentCountryCircular].ratings_parsed).forEach(projectId => {
+                    const project = rawData[currentCountryCircular].ratings_parsed[projectId];
+                    individualProjects.push({
+                        project_id: project.project_id || projectId,
+                        project_name: project.project_name || 'Unnamed Project',
+                        region: project.region || 'Unknown',
+                        country: project.country || currentCountryCircular,
+                        GPVP: project.GPVP || 'Unknown',
+                        VPU: project.VPU || 'Unknown',
+                        lead_GP: project.lead_GP || 'Unknown',
+                        lending_inst: project.lending_inst || 'Unknown',
+                        agreement: project.agreement || 'Unknown',
+                        approval_FY: project.approval_FY || 'Unknown',
+                        commitment_net: (project.commitment_net || 0) / 1000000, // Convert to millions
+                        sector: project.lead_GP || 'Unknown'
+                    });
+                });
+            }
+            
+            // Sort projects by sector and then by commitment size
+            individualProjects.sort((a, b) => {
+                if (a.sector !== b.sector) {
+                    return a.sector.localeCompare(b.sector);
+                }
+                return b.commitment_net - a.commitment_net;
+            });
         }
 
         function updateStats() {
@@ -596,6 +782,27 @@
                 .style('fill', '#333');
 
             drawChart();
+        }
+
+        function setupCircularChart() {
+            // Create SVG for circular chart
+            circularSvg = d3.select('#circularChart')
+                .append('svg')
+                .attr('width', circularWidth)
+                .attr('height', circularHeight);
+
+            circularChart = circularSvg.append('g')
+                .attr('transform', `translate(${circularWidth/2},${circularHeight/2})`);
+
+            // Create circular tooltip
+            d3.select('body').append('div')
+                .attr('class', 'circular-tooltip')
+                .attr('id', 'circularTooltip');
+
+            // Initialize with first country data
+            processIndividualProjects();
+            drawCircularChart();
+            createLegend();
         }
 
         function drawChart() {
@@ -704,9 +911,159 @@
             });
         }
 
-        function toggleView(view) {
-            if (view === currentView) return;
+                function drawCircularChart() {
+            if (individualProjects.length === 0) {
+                circularChart.selectAll("*").remove(); // Clear chart if no data
+                return;
+            }
+
+            // Group projects by sector and sort sectors alphabetically for consistency
+            const projectsBySector = d3.group(individualProjects, d => d.sector);
+            const sectors = Array.from(projectsBySector.keys()).sort((a, b) => a.localeCompare(b));
             
+            // Create a consistent color mapping for sectors
+            const sectorColorMap = new Map();
+            sectors.forEach((sector, i) => {
+                sectorColorMap.set(sector, colorScale(i));
+            });
+
+            // Calculate angle for each project
+            const angleScale = d3.scaleLinear()
+                .domain([0, individualProjects.length])
+                .range([0, 2 * Math.PI]);
+            
+            // Calculate max commitment for scaling bar heights
+            const maxCommitment = d3.max(individualProjects, d => d.commitment_net) || 1;
+            const innerRadius = 60; // Increased inner radius for more space
+            const outerRadiusMax = circularRadius - 40; // Adjusted max radius
+            
+            const radiusScale = d3.scaleLinear()
+                .domain([0, maxCommitment])
+                .range([innerRadius, outerRadiusMax]);
+
+            let currentIndex = 0;
+            
+            // Remove existing elements before redrawing
+            circularChart.selectAll("*").remove();
+
+            sectors.forEach(sector => {
+                const sectorProjects = projectsBySector.get(sector);
+                const sectorColor = sectorColorMap.get(sector);
+                const sectorStartIndex = currentIndex;
+                const sectorEndIndex = currentIndex + sectorProjects.length - 1;
+                const sectorMiddleIndex = (sectorStartIndex + sectorEndIndex) / 2;
+                
+                // Draw individual project bars
+                sectorProjects.forEach((project) => {
+                    const angle = angleScale(currentIndex);
+                    const outerRadius = radiusScale(project.commitment_net);
+                    
+                    const x1 = Math.cos(angle - Math.PI / 2) * innerRadius;
+                    const y1 = Math.sin(angle - Math.PI / 2) * innerRadius;
+                    const x2 = Math.cos(angle - Math.PI / 2) * outerRadius;
+                    const y2 = Math.sin(angle - Math.PI / 2) * outerRadius;
+                    
+                    circularChart.append('line')
+                        .datum(project) // Bind data to the element
+                        .attr('class', 'project-bar')
+                        .attr('x1', x1)
+                        .attr('y1', y1)
+                        .attr('x2', x2)
+                        .attr('y2', y2)
+                        .attr('stroke', sectorColor)
+                        .attr('stroke-width', Math.max(1.5, 360 / individualProjects.length))
+                        .attr('stroke-linecap', 'round')
+                        .on('mouseover', function(event, d) {
+                            showCircularTooltip(event, d);
+                            d3.select(this).raise().style('filter', 'brightness(1.5)');
+                        })
+                        .on('mouseout', function() {
+                            hideCircularTooltip();
+                            d3.select(this).style('filter', 'brightness(1)');
+                        });
+                    
+                    currentIndex++;
+                });
+                
+                // Add sector labels
+                if (sectorProjects.length > 0) {
+                    const labelAngle = angleScale(sectorMiddleIndex);
+                    const labelRadius = outerRadiusMax + 10; // Place labels outside the longest bar
+                    
+                    const labelX = Math.cos(labelAngle - Math.PI / 2) * labelRadius;
+                    const labelY = Math.sin(labelAngle - Math.PI / 2) * labelRadius;
+                    const degrees = (labelAngle * 180 / Math.PI);
+
+                    // --- THIS IS THE CORRECTED PART ---
+                    const isFlipped = degrees > 90 && degrees < 270;
+                    const rotation = isFlipped ? degrees + 180 : degrees;
+                    const textAnchor = isFlipped ? "end" : "start";
+                    const dx = isFlipped ? -5 : 5;
+                    
+                    circularChart.append('text')
+                        .attr('class', 'sector-label')
+                        .attr('transform', `translate(${labelX}, ${labelY}) rotate(${rotation})`)
+                        .attr('dy', '0.35em')
+                        .attr('dx', dx)
+                        .style('text-anchor', textAnchor)
+                        .text(sector.length > 20 ? sector.substring(0, 20) + '...' : sector);
+                }
+            });
+        }
+
+
+        function showCircularTooltip(event, project) {
+            const tooltip = d3.select('#circularTooltip');
+            
+            tooltip.html(`
+                <div style="margin-bottom: 8px;"><strong>${project.project_name}</strong></div>
+                <div><strong>Project ID:</strong> ${project.project_id}</div>
+                <div><strong>Country:</strong> ${project.country}</div>
+                <div><strong>Region:</strong> ${project.region}</div>
+                <div><strong>Sector:</strong> ${project.lead_GP}</div>
+                <div><strong>GPVP:</strong> ${project.GPVP}</div>
+                <div><strong>VPU:</strong> ${project.VPU}</div>
+                <div><strong>Lending Instrument:</strong> ${project.lending_inst}</div>
+                <div><strong>Agreement:</strong> ${project.agreement}</div>
+                <div><strong>Approval FY:</strong> ${project.approval_FY}</div>
+                <div><strong>Commitment:</strong> ${project.commitment_net.toFixed(1)}M</div>
+            `)
+            .style('opacity', 1)
+            .style('left', (event.pageX + 15) + 'px')
+            .style('top', (event.pageY - 10) + 'px');
+        }
+
+        function hideCircularTooltip() {
+            d3.select('#circularTooltip').style('opacity', 0);
+        }
+
+        function createLegend() {
+            const legendContainer = d3.select('#projectLegend');
+            legendContainer.selectAll('*').remove();
+            
+            if (individualProjects.length === 0) return;
+            
+            const sectors = [...new Set(individualProjects.map(d => d.sector))].sort((a, b) => a.localeCompare(b));
+            const sectorColors = {};
+            sectors.forEach((sector, index) => {
+                sectorColors[sector] = colorScale(index);
+            });
+            
+            sectors.forEach((sector) => {
+                const legendItem = legendContainer.append('div')
+                    .attr('class', 'legend-item');
+                
+                legendItem.append('div')
+                    .attr('class', 'legend-color')
+                    .style('background-color', sectorColors[sector]);
+                
+                legendItem.append('span')
+                    .text(sector);
+            });
+        }
+
+        function toggleView(view) {
+            // Update current view
             currentView = view;
             
             // Update button states
@@ -716,26 +1073,48 @@
             // Update titles
             updateChartTitles();
             
+            // Re-sort data based on new metric and redraw
+            processData();
             drawChart();
         }
 
         function setupScrollHandling() {
-            let currentSection = 0;
             const sections = document.querySelectorAll('.story-section');
+            let currentSection = 0;
+            
+            const observerOptions = {
+                root: null,
+                rootMargin: '-20% 0px -20% 0px',
+                threshold: 0.3
+            };
+
+            const observer = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        // Remove active class from all sections
+                        sections.forEach(section => section.classList.remove('active'));
+                        
+                        // Add active class to current section
+                        entry.target.classList.add('active');
+                        
+                        // Get step number
+                        const step = parseInt(entry.target.dataset.step || 0);
+                        currentSection = step;
+                        
+                        console.log('Active section:', step);
+                    }
+                });
+            }, observerOptions);
+
+            sections.forEach((section, index) => {
+                section.dataset.step = index;
+                observer.observe(section);
+            });
             
             function updateActiveSection() {
                 const scrollProgress = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
                 const progressBar = document.getElementById('progressBar');
                 progressBar.style.width = (scrollProgress * 100) + '%';
-
-                const sectionHeight = window.innerHeight;
-                const newSection = Math.min(Math.floor(window.scrollY / sectionHeight), sections.length - 1);
-                
-                if (newSection !== currentSection) {
-                    sections[currentSection].classList.remove('active');
-                    sections[newSection].classList.add('active');
-                    currentSection = newSection;
-                }
             }
 
             window.addEventListener('scroll', updateActiveSection);
