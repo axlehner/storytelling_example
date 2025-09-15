@@ -3,64 +3,747 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>D3 Scrollytelling Story</title>
-    <link rel="stylesheet" href="css/styles.css">
-    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <title>World Bank Projects: From Counts to Commitments</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #ffffff;
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .story-section {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            opacity: 0;
+            transform: translateY(50px);
+            transition: all 0.8s ease-in-out;
+        }
+
+        .story-section.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .title {
+            color: #0f47af;
+            text-align: center;
+            margin-bottom: 50px;
+        }
+
+        .title h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .title p {
+            font-size: 1.3em;
+            opacity: 0.8;
+            color: #333;
+        }
+
+        .chart-container {
+            background: #ffffff;
+            border: 2px solid #0f47af;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(15, 71, 175, 0.1);
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        .chart-title {
+            font-size: 2em;
+            color: #0f47af;
+            text-align: center;
+            margin-bottom: 15px;
+            font-weight: 700;
+        }
+
+        .chart-subtitle {
+            font-size: 1.2em;
+            color: #666;
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .controls-container {
+            text-align: center;
+            margin-bottom: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            align-items: center;
+        }
+
+        .country-selector-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .country-selector-label {
+            font-size: 1.2em;
+            color: #0f47af;
+            font-weight: 600;
+        }
+
+        .country-selector {
+            background: #0f47af;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 1.1em;
+            cursor: pointer;
+            box-shadow: 0 8px 16px rgba(15, 71, 175, 0.3);
+            transition: all 0.3s ease;
+            min-width: 250px;
+            font-weight: 500;
+        }
+
+        .country-selector:hover {
+            background: #083691;
+            transform: translateY(-2px);
+            box-shadow: 0 12px 24px rgba(15, 71, 175, 0.4);
+        }
+
+        .country-selector option {
+            background: white;
+            color: #333;
+            padding: 10px;
+        }
+
+        .toggle-container {
+            display: flex;
+            gap: 15px;
+        }
+
+        .toggle-button {
+            background: #0f47af;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 50px;
+            font-size: 1.1em;
+            cursor: pointer;
+            box-shadow: 0 10px 20px rgba(15, 71, 175, 0.2);
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
+
+        .toggle-button:hover {
+            background: #083691;
+            transform: translateY(-2px);
+            box-shadow: 0 15px 30px rgba(15, 71, 175, 0.3);
+        }
+
+        .toggle-button.active {
+            background: #00aeef;
+            transform: scale(1.05);
+        }
+
+        .bar {
+            transition: all 0.8s ease;
+            cursor: pointer;
+        }
+
+        .bar:hover {
+            opacity: 0.8;
+            transform: scaleY(1.02);
+        }
+
+        .axis {
+            font-size: 12px;
+        }
+
+        .axis text {
+            fill: #333;
+        }
+
+        .axis path,
+        .axis line {
+            stroke: #666;
+        }
+
+        .loading-spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(15, 71, 175, 0.3);
+            border-radius: 50%;
+            border-top-color: #0f47af;
+            animation: spin 1s ease-in-out infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .scroll-indicator {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #0f47af;
+            text-align: center;
+            opacity: 0.7;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 1; }
+        }
+
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 4px;
+            background: linear-gradient(90deg, #0f47af, #00aeef);
+            transition: width 0.3s ease;
+            z-index: 1000;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .stat-card {
+            background: #0f47af;
+            border-radius: 15px;
+            padding: 25px;
+            text-align: center;
+            color: white;
+            box-shadow: 0 10px 20px rgba(15, 71, 175, 0.2);
+            transition: transform 0.3s ease;
+        }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .stat-value {
+            font-size: 2.2em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .stat-label {
+            font-size: 1em;
+            opacity: 0.9;
+            font-weight: 500;
+        }
+
+        .tooltip {
+            position: absolute;
+            background: rgba(15, 71, 175, 0.95);
+            color: white;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+
+        .world-bank-header {
+            background: #0f47af;
+            color: white;
+            padding: 20px 0;
+            margin-bottom: 0;
+        }
+
+        .world-bank-header h1 {
+            margin: 0;
+            font-size: 2.5em;
+            font-weight: 700;
+        }
+
+        .world-bank-header p {
+            margin: 10px 0 0 0;
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+    </style>
 </head>
 <body>
+    <div class="progress-bar" id="progressBar"></div>
+    
     <div class="container">
-        <!-- Header -->
-        <header class="intro">
-            <h1>The Data Story</h1>
-            <p>Scroll down to explore how data transforms</p>
-        </header>
-
-        <!-- Scrollytelling sections -->
-        <div class="scrolly-container">
-            <!-- Fixed visualization container -->
-            <div class="visualization-container">
-                <svg id="main-chart"></svg>
+        <!-- Section 1: Introduction -->
+        <div class="story-section active">
+            <div class="world-bank-header">
+                <div class="title">
+                    <h1>World Bank Projects Dashboard</h1>
+                    <p>From Project Counts to Financial Commitments</p>
+                    <p style="margin-top: 15px; font-size: 1em; opacity: 0.8;">Exploring development impact across sectors and countries</p>
+                </div>
             </div>
-
-            <!-- Text sections that trigger transitions -->
-            <div class="text-sections">
-                <div class="text-section" data-step="0">
-                    <div class="text-content">
-                        <h2>Starting with the Basics</h2>
-                        <p>Here we see our data represented as a simple bar chart. Each bar represents a different category with its corresponding value.</p>
-                    </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalProjects">-</div>
+                    <div class="stat-label">Total Projects</div>
                 </div>
-
-                <div class="text-section" data-step="1">
-                    <div class="text-content">
-                        <h2>The Transformation Begins</h2>
-                        <p>Watch as our bars begin to curve and transform. The linear representation starts to bend into something more organic.</p>
-                    </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalCommitment">-</div>
+                    <div class="stat-label">Total Commitment (M USD)</div>
                 </div>
-
-                <div class="text-section" data-step="2">
-                    <div class="text-content">
-                        <h2>Embracing the Circle</h2>
-                        <p>Our data has now formed a complete circle. This radial representation reveals new patterns and relationships in the data.</p>
-                    </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalCountries">-</div>
+                    <div class="stat-label">Selected Country</div>
                 </div>
-
-                <div class="text-section" data-step="3">
-                    <div class="text-content">
-                        <h2>The Complete Picture</h2>
-                        <p>In its final form, our circular visualization shows the cyclical nature of our data, with enhanced colors and refined positioning.</p>
-                    </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="totalSectors">-</div>
+                    <div class="stat-label">Active Sectors</div>
                 </div>
             </div>
         </div>
 
-        <!-- Footer -->
-        <footer>
-            <p>Built with D3.js and love for data storytelling</p>
-        </footer>
+        <!-- Section 2: Interactive Chart -->
+        <div class="story-section">
+            <div class="chart-container">
+                <h2 class="chart-title" id="chartTitle">Project Distribution by Sector</h2>
+                <p class="chart-subtitle" id="chartSubtitle">Number of projects across different Global Practice sectors</p>
+                
+                <div class="controls-container">
+                    <div class="country-selector-container">
+                        <label class="country-selector-label" for="countrySelect">Select Country:</label>
+                        <select class="country-selector" id="countrySelect" onchange="onCountryChange()">
+                            <option value="">Loading countries...</option>
+                        </select>
+                    </div>
+                    
+                    <div class="toggle-container">
+                        <button class="toggle-button active" onclick="toggleView('count')" id="countBtn">
+                            Project Count
+                        </button>
+                        <button class="toggle-button" onclick="toggleView('commitment')" id="commitmentBtn">
+                            Financial Commitment
+                        </button>
+                    </div>
+                </div>
+                
+                <div id="chart"></div>
+            </div>
+        </div>
     </div>
 
-    <script src="js/data.js"></script>
-    <script src="js/main.js"></script>
+    <div class="scroll-indicator">
+        <div>Scroll to explore</div>
+        <div style="margin-top: 10px; font-size: 20px;">↓</div>
+    </div>
+
+    <div class="tooltip" id="tooltip"></div>
+
+    <script>
+        // Data processing and visualization
+        let rawData = {};
+        let processedData = [];
+        let currentView = 'count';
+        let currentCountry = '';
+        let allCountries = [];
+        let chart, svg, xScale, yScale, bars;
+
+        // Chart dimensions
+        const margin = {top: 40, right: 60, bottom: 100, left: 80};
+        const width = 800 - margin.left - margin.right;
+        const height = 500 - margin.top - margin.bottom;
+
+        // World Bank color scale
+        const colorScale = d3.scaleOrdinal()
+            .range(['#0f47af', '#00aeef', '#009fda', '#0071bc', '#005eb8', '#083691', '#1f5aa6', '#336bb5', '#4c7cc4', '#668dd3']);
+
+        // Initialize the visualization
+        async function init() {
+            try {
+                // Load the data
+                const response = await fetch('first_ratings.json');
+                if (!response.ok) {
+                    console.log('Using sample data...');
+                    rawData = generateSampleData();
+                } else {
+                    rawData = await response.json();
+                }
+                
+                // Get all countries and populate selector
+                allCountries = Object.keys(rawData).sort();
+                populateCountrySelector();
+                
+                // Set default country (first one)
+                if (allCountries.length > 0) {
+                    currentCountry = allCountries[0];
+                    document.getElementById('countrySelect').value = currentCountry;
+                }
+                
+                processData();
+                updateStats();
+                setupChart();
+                setupScrollHandling();
+                
+            } catch (error) {
+                console.log('Error loading data, using sample data:', error);
+                rawData = generateSampleData();
+                allCountries = Object.keys(rawData).sort();
+                populateCountrySelector();
+                if (allCountries.length > 0) {
+                    currentCountry = allCountries[0];
+                    document.getElementById('countrySelect').value = currentCountry;
+                }
+                processData();
+                updateStats();
+                setupChart();
+                setupScrollHandling();
+            }
+        }
+
+        function populateCountrySelector() {
+            const selector = document.getElementById('countrySelect');
+            selector.innerHTML = '';
+            
+            if (allCountries.length === 0) {
+                const option = document.createElement('option');
+                option.value = '';
+                option.textContent = 'No countries found';
+                selector.appendChild(option);
+                return;
+            }
+            
+            allCountries.forEach(country => {
+                const option = document.createElement('option');
+                option.value = country;
+                option.textContent = country;
+                selector.appendChild(option);
+            });
+        }
+
+        function onCountryChange() {
+            const selector = document.getElementById('countrySelect');
+            currentCountry = selector.value;
+            
+            if (!currentCountry) return;
+            
+            // Update chart title to show selected country
+            updateChartTitles();
+            
+            // Reprocess data for selected country
+            processData();
+            updateStats();
+            drawChart();
+        }
+
+        function updateChartTitles() {
+            const baseTitle = currentView === 'count' ? 
+                'Project Distribution by Sector' : 
+                'Financial Commitment by Sector';
+            const baseSubtitle = currentView === 'count' ? 
+                'Number of projects across different Global Practice sectors' : 
+                'Total commitment amounts in millions of USD';
+            
+            document.getElementById('chartTitle').textContent = `${baseTitle} - ${currentCountry}`;
+            document.getElementById('chartSubtitle').textContent = baseSubtitle;
+        }
+
+        function generateSampleData() {
+            const sectors = [
+                "Urban, Resilience and Land",
+                "Health, Nutrition & Population",
+                "Education",
+                "Social Protection & Jobs",
+                "Finance, Competitiveness & Innovation",
+                "Transport & Digital Development",
+                "Water",
+                "Energy & Extractives",
+                "Agriculture and Food",
+                "Governance"
+            ];
+
+            const countries = ['Argentina', 'Brazil', 'Mexico', 'Colombia', 'Peru', 'Chile'];
+            const sampleData = {};
+
+            countries.forEach(country => {
+                sampleData[country] = {
+                    ratings_parsed: {}
+                };
+
+                const numProjects = Math.floor(Math.random() * 25) + 15;
+                for (let i = 0; i < numProjects; i++) {
+                    const projectId = `P${String(Math.floor(Math.random() * 900000) + 100000)}`;
+                    sampleData[country].ratings_parsed[projectId] = {
+                        project_id: projectId,
+                        lead_GP: sectors[Math.floor(Math.random() * sectors.length)],
+                        commitment_net: Math.random() * 400000000 + 50000000,
+                        project_name: `Sample Project ${i + 1}`,
+                        country: country
+                    };
+                }
+            });
+
+            return sampleData;
+        }
+
+        function processData() {
+            const sectorData = {};
+            let totalProjects = 0;
+            let totalCommitment = 0;
+
+            // Process only the selected country
+            if (currentCountry && rawData[currentCountry] && rawData[currentCountry].ratings_parsed) {
+                Object.keys(rawData[currentCountry].ratings_parsed).forEach(projectId => {
+                    const project = rawData[currentCountry].ratings_parsed[projectId];
+                    const sector = project.lead_GP || 'Unknown';
+                    
+                    if (!sectorData[sector]) {
+                        sectorData[sector] = {
+                            count: 0,
+                            commitment: 0,
+                            sector: sector
+                        };
+                    }
+                    
+                    sectorData[sector].count++;
+                    sectorData[sector].commitment += (project.commitment_net || 0);
+                    totalProjects++;
+                    totalCommitment += (project.commitment_net || 0);
+                });
+            }
+
+            // Convert to array and sort
+            processedData = Object.values(sectorData)
+                .sort((a, b) => b.count - a.count)
+                .map(d => ({
+                    ...d,
+                    commitment: d.commitment / 1000000
+                }));
+
+            // Store totals for stats
+            window.currentCountryStats = {
+                projects: totalProjects,
+                commitment: totalCommitment / 1000000,
+                sectors: processedData.length
+            };
+        }
+
+        function updateStats() {
+            const stats = window.currentCountryStats || { projects: 0, commitment: 0, sectors: 0 };
+            const totalCountries = Object.keys(rawData).length;
+            
+            document.getElementById('totalProjects').textContent = stats.projects.toLocaleString();
+            document.getElementById('totalCommitment').textContent = `$${stats.commitment.toFixed(0)}M`;
+            document.getElementById('totalCountries').textContent = currentCountry || 'None';
+            document.getElementById('totalSectors').textContent = stats.sectors;
+        }
+
+        function setupChart() {
+            // Create SVG
+            svg = d3.select('#chart')
+                .append('svg')
+                .attr('width', width + margin.left + margin.right)
+                .attr('height', height + margin.top + margin.bottom);
+
+            chart = svg.append('g')
+                .attr('transform', `translate(${margin.left},${margin.top})`);
+
+            // Setup scales
+            xScale = d3.scaleBand()
+                .domain(processedData.map(d => d.sector))
+                .range([0, width])
+                .padding(0.1);
+
+            yScale = d3.scaleLinear()
+                .range([height, 0]);
+
+            // Setup axes
+            chart.append('g')
+                .attr('class', 'x-axis axis')
+                .attr('transform', `translate(0,${height})`);
+
+            chart.append('g')
+                .attr('class', 'y-axis axis');
+
+            // Add axis labels
+            chart.append('text')
+                .attr('class', 'y-label')
+                .attr('transform', 'rotate(-90)')
+                .attr('y', 0 - margin.left)
+                .attr('x', 0 - (height / 2))
+                .attr('dy', '1em')
+                .style('text-anchor', 'middle')
+                .style('font-size', '12px')
+                .style('fill', '#333');
+
+            drawChart();
+        }
+
+        function drawChart() {
+            const data = processedData;
+            const metric = currentView === 'count' ? 'count' : 'commitment';
+            
+            if (data.length === 0) {
+                // Handle empty data
+                chart.selectAll('.bar').remove();
+                chart.select('.x-axis').call(d3.axisBottom(xScale.domain([])));
+                chart.select('.y-axis').call(d3.axisLeft(yScale.domain([0, 1])));
+                return;
+            }
+            
+            // Update scales
+            xScale.domain(data.map(d => d.sector));
+            yScale.domain([0, d3.max(data, d => d[metric]) * 1.1]);
+
+            // Update axes
+            const xAxis = d3.axisBottom(xScale)
+                .tickFormat(d => {
+                    return d.length > 12 ? d.substring(0, 12) + '...' : d;
+                });
+
+            const yAxis = d3.axisLeft(yScale)
+                .tickFormat(d => {
+                    if (currentView === 'commitment') {
+                        return `$${d.toFixed(0)}M`;
+                    }
+                    return d;
+                });
+
+            chart.select('.x-axis')
+                .transition()
+                .duration(800)
+                .call(xAxis)
+                .selectAll('text')
+                .style('text-anchor', 'end')
+                .attr('dx', '-.8em')
+                .attr('dy', '.15em')
+                .attr('transform', 'rotate(-45)');
+
+            chart.select('.y-axis')
+                .transition()
+                .duration(800)
+                .call(yAxis);
+
+            // Update y-axis label
+            chart.select('.y-label')
+                .transition()
+                .duration(500)
+                .text(currentView === 'count' ? 'Number of Projects' : 'Commitment (Million USD)');
+
+            // Create/update bars
+            bars = chart.selectAll('.bar')
+                .data(data, d => d.sector);
+
+            bars.exit()
+                .transition()
+                .duration(800)
+                .attr('y', height)
+                .attr('height', 0)
+                .remove();
+
+            const barsEnter = bars.enter()
+                .append('rect')
+                .attr('class', 'bar')
+                .attr('x', d => xScale(d.sector))
+                .attr('width', xScale.bandwidth())
+                .attr('y', height)
+                .attr('height', 0)
+                .attr('fill', (d, i) => colorScale(i));
+
+            bars = barsEnter.merge(bars);
+
+            bars.transition()
+                .duration(800)
+                .ease(d3.easeElastic.period(0.3))
+                .attr('x', d => xScale(d.sector))
+                .attr('width', xScale.bandwidth())
+                .attr('y', d => yScale(d[metric]))
+                .attr('height', d => height - yScale(d[metric]))
+                .attr('fill', (d, i) => colorScale(i));
+
+            // Add tooltips
+            bars.on('mouseover', function(event, d) {
+                const tooltip = d3.select('#tooltip');
+                const value = currentView === 'count' ? 
+                    `${d.count} projects` : 
+                    `$${d.commitment.toFixed(1)}M commitment`;
+                
+                tooltip.html(`
+                    <strong>${d.sector}</strong><br>
+                    ${value}<br>
+                    <small>${d.count} projects total</small>
+                `)
+                .style('opacity', 1)
+                .style('left', (event.pageX + 10) + 'px')
+                .style('top', (event.pageY - 10) + 'px');
+
+                d3.select(this).style('opacity', 0.7);
+            })
+            .on('mouseout', function() {
+                d3.select('#tooltip').style('opacity', 0);
+                d3.select(this).style('opacity', 1);
+            });
+        }
+
+        function toggleView(view) {
+            if (view === currentView) return;
+            
+            currentView = view;
+            
+            // Update button states
+            document.getElementById('countBtn').classList.toggle('active', view === 'count');
+            document.getElementById('commitmentBtn').classList.toggle('active', view === 'commitment');
+            
+            // Update titles
+            updateChartTitles();
+            
+            drawChart();
+        }
+
+        function setupScrollHandling() {
+            let currentSection = 0;
+            const sections = document.querySelectorAll('.story-section');
+            
+            function updateActiveSection() {
+                const scrollProgress = window.scrollY / (document.documentElement.scrollHeight - window.innerHeight);
+                const progressBar = document.getElementById('progressBar');
+                progressBar.style.width = (scrollProgress * 100) + '%';
+
+                const sectionHeight = window.innerHeight;
+                const newSection = Math.min(Math.floor(window.scrollY / sectionHeight), sections.length - 1);
+                
+                if (newSection !== currentSection) {
+                    sections[currentSection].classList.remove('active');
+                    sections[newSection].classList.add('active');
+                    currentSection = newSection;
+                }
+            }
+
+            window.addEventListener('scroll', updateActiveSection);
+            updateActiveSection();
+        }
+
+        // Initialize when page loads
+        window.addEventListener('load', init);
+    </script>
 </body>
 </html>
